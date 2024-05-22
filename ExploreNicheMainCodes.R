@@ -1,33 +1,89 @@
-library(tidyverse)
-library(ggalt)
+# Load necessary libraries
+library(tidyverse)   # For data manipulation and visualization
+library(ggplot2)     # For creating visualizations
+library(Matrix)      # For matrix operations, potentially for use in models
+library(lme4)        # For fitting linear mixed-effects models
+library(dplyr)       # For data manipulation
+library(gridExtra)   # For arranging multiple plots
+library(readxl)      # For reading Excel files
+library(svglite)
+library(shiny)
 library(ggplot2)
-library(Matrix)
-library(lme4)
-library(dplyr)
-library(gridExtra)
-library(readxl)
-library(ggplot2)
+library(plotly)
 
 
 
-
+# Load the dataset
+merged_data_clean <- read.csv("/Users/sepidehgolshani/Desktop/PhD.ExploreNiche/ExploreNiche/merged_data_clean.csv")
 data <- merged_data_clean
 
 
-#SCH logarithmic regression----
 
-# Assuming 'data' is your dataframe and 'Exploratories' is the name of the column containing the site information
+# logarithmic regression and generate plots for a given site----
+perform_log_regression <- function(site) {
+  # Add a new column for logarithmic depth
+  data$LogDepth <- log(data$Depth..cm.)
+  
+  # Filter data for the specified site in the 'Exploratory' column
+  site_data <- subset(data, grepl(site, data$Exploratory))
+  
+  # Create an empty list to store plots
+  plots <- list()
+  
+  # Loop over unique Plot.IDs within the site data
+  for (plot_id in unique(site_data$Plot.ID)) {
+    plot_data <- subset(site_data, Plot.ID == plot_id)  # Data for current Plot.ID
+    model <- lm(d18O ~ LogDepth, data = plot_data)  # Fit the linear model
+    
+    # Create prediction data
+    prediction_data <- data.frame(LogDepth = seq(min(plot_data$LogDepth), max(plot_data$LogDepth), length.out = 100))
+    prediction_data$d18O <- predict(model, newdata = prediction_data)
+    
+    # Calculate R-squared value
+    r_squared <- summary(model)$r.squared
+    
+    # Generate the plot
+    p <- ggplot(plot_data, aes(x = d18O, y = Depth..cm.)) +
+      geom_point() +
+      geom_line(data = prediction_data, aes(x = d18O, y = exp(LogDepth)), color = "red") +
+      annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1,
+               label = paste("R^2 = ", round(r_squared, 2), sep = ""),
+               size = 5, parse = TRUE) +
+      theme_minimal() +
+      labs(title = paste("Plot ID:", plot_id),
+           x = expression(delta^18*O ~ '(%o)'),
+           y = "Depth (cm)")
+    
+    plots[[plot_id]] <- p  # Store the plot in the list
+  }
+  
+  # Output plots
+  for (plot_id in names(plots)) {
+    print(plots[[plot_id]])
+    # Uncomment to save each plot as a separate file
+    # ggsave(filename = paste("plot_", site, "_", plot_id, ".png", sep = ""), plot = plots[[plot_id]], width = 10, height = 8)
+  }
+}
+
+# Perform the analysis for each site
+perform_log_regression("SCH")
+perform_log_regression("HAI")
+perform_log_regression("ALB")
+
+
+
+
+#Single plot codes ---
+# --- Single plot analysis ---
+
+# Adding LogDepth to the dataframe; ensure the column name 'Depth..cm.' matches your dataset's actual column name
 data$LogDepth <- log(data$Depth..cm.)
 
-# Filter data for rows with 'SCH' in the 'Exploratories' column
-sch_data <- subset(data, grepl("SCH", data$Exploratory))
+# Filter data for 'HEG48' in the 'Plot.ID' column
+plot_data <- subset(data, Plot.ID == "HEG48")
 
-# Create an empty list to store plots for SCH exploratories
-plots <- list()
-
-for (plot_id in unique(sch_data$Plot.ID)) {
-  # Subset the data for the current Plot.ID within SCH exploratories
-  plot_data <- subset(sch_data, Plot.ID == plot_id)
+# Check if plot_data is not empty to proceed
+if (nrow(plot_data) > 0) {
   
   # Fit the linear model with logarithmic transformation
   model <- lm(d18O ~ LogDepth, data = plot_data)
@@ -39,143 +95,36 @@ for (plot_id in unique(sch_data$Plot.ID)) {
   # Calculate R-squared value
   r_squared <- summary(model)$r.squared
   
-  # Create the plot with ggplot2
+  # Create the plot using ggplot2
+  library(ggplot2)
   p <- ggplot(plot_data, aes(x = d18O, y = Depth..cm.)) +
-    geom_point() +  # Add points
+    geom_point() +  # Add data points
     geom_line(data = prediction_data, aes(x = d18O, y = exp(LogDepth)), color = "red") +  # Add the regression line
-    annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1,
-             label = paste("R^2 = ", round(r_squared, 2), sep = ""),
+    annotate("text", x = max(plot_data$d18O), y = 0, hjust = 1.1, vjust = -0.1,
+             label = paste("R^2 =", round(r_squared, 2)),  # Display R-squared value on the plot
              size = 5, parse = TRUE) +
     theme_minimal() +
-    labs(title = paste("Plot ID:", plot_id),
-         x = expression(delta^18*O ~ '(%o)'),
-         y = "Depth (cm)")
+    labs(title = "Plot ID: HEG48",  # Customize the plot title
+         x = expression(delta^18*O ~ '(%o)'),  # Customize x-axis label with isotopic notation
+         y = "Depth (cm)")  # Customize y-axis label
   
-  # Store the plot in the list using the Plot.ID
-  plots[[plot_id]] <- p
-}
-
-# Print and/or save the plots for SCH exploratories
-for (plot_id in names(plots)) {
-  print(plots[[plot_id]])
-  # Uncomment the next line to save each plot as a separate file
-  # ggsave(filename = paste("plot_SCH_", plot_id, ".png", sep = ""), plot = plots[[plot_id]], width = 10, height = 8)
+  # Print the plot
+  print(p)
+} else {
+  print("No data available for Plot ID: HEG48")
 }
 
 
 
 
-#HAI logarithmic regression----
 
 
-# Assuming 'data' is your dataframe and 'Exploratories' is the name of the column containing the site information
-data$LogDepth <- log(data$Depth..cm.)
+# --- R_Square calculations ----
 
-# Filter data for rows with 'HAI' in the 'Exploratories' column
-hai_data <- subset(data, grepl("HAI", data$Exploratory))
-
-# Create an empty list to store plots for HAI exploratories
-plots <- list()
-
-for (plot_id in unique(hai_data$Plot.ID)) {
-  # Subset the data for the current Plot.ID within HAI exploratories
-  plot_data <- subset(hai_data, Plot.ID == plot_id)
-  
-  # Fit the linear model with logarithmic transformation
-  model <- lm(d18O ~ LogDepth, data = plot_data)
-  
-  # Create a new data frame for predictions
-  prediction_data <- data.frame(LogDepth = seq(min(plot_data$LogDepth), max(plot_data$LogDepth), length.out = 100))
-  prediction_data$d18O <- predict(model, newdata = prediction_data)
-  
-  # Calculate R-squared value
-  r_squared <- summary(model)$r.squared
-  
-  # Create the plot with ggplot2
-  p <- ggplot(plot_data, aes(x = d18O, y = Depth..cm.)) +
-    geom_point() +  # Add points
-    geom_line(data = prediction_data, aes(x = d18O, y = exp(LogDepth)), color = "red") +  # Add the regression line
-    annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1,
-             label = paste("R^2 = ", round(r_squared, 2), sep = ""),
-             size = 5, parse = TRUE) +
-    theme_minimal() +
-    labs(title = paste("Plot ID:", plot_id),
-         x = expression(delta^18*O ~ '(%o)'),
-         y = "Depth (cm)")
-  
-  # Store the plot in the list using the Plot.ID
-  plots[[plot_id]] <- p
-}
-
-# Print and/or save the plots for HAI exploratories
-for (plot_id in names(plots)) {
-  print(plots[[plot_id]])
-  # Uncomment the next line to save each plot as a separate file
-  # ggsave(filename = paste("plot_HAI_", plot_id, ".png", sep = ""), plot = plots[[plot_id]], width = 10, height = 8)
-}
-
-
-
-
-#ALB logarithmic regression----
-
-# Assuming 'data' is your dataframe and 'Exploratories' is the name of the column containing the site information
-data$LogDepth <- log(data$Depth..cm.)
-
-# Filter data for rows with 'ALB' in the 'Exploratories' column
-alb_data <- subset(data, grepl("ALB", data$Exploratory))
-
-# Create an empty list to store plots for ALB exploratories
-plots <- list()
-
-for (plot_id in unique(alb_data$Plot.ID)) {
-  # Subset the data for the current Plot.ID within ALB exploratories
-  plot_data <- subset(alb_data, Plot.ID == plot_id)
-  
-  # Fit the linear model with logarithmic transformation
-  model <- lm(d18O ~ LogDepth, data = plot_data)
-  
-  # Create a new data frame for predictions
-  prediction_data <- data.frame(LogDepth = seq(min(plot_data$LogDepth), max(plot_data$LogDepth), length.out = 100))
-  prediction_data$d18O <- predict(model, newdata = prediction_data)
-  
-  # Calculate R-squared value
-  r_squared <- summary(model)$r.squared
-  
-  # Create the plot with ggplot2
-  p <- ggplot(plot_data, aes(x = d18O, y = Depth..cm.)) +
-    geom_point() +  # Add points
-    geom_line(data = prediction_data, aes(x = d18O, y = exp(LogDepth)), color = "red") +  # Add the regression line
-    annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.1,
-             label = paste("R^2 = ", round(r_squared, 2), sep = ""),
-             size = 5, parse = TRUE) +
-    theme_minimal() +
-    labs(title = paste("Plot ID:", plot_id),
-         x = expression(delta^18*O ~ '(%o)'),
-         y = "Depth (cm)")
-  
-  # Store the plot in the list using the Plot.ID
-  plots[[plot_id]] <- p
-}
-
-# Print and/or save the plots for ALB exploratories
-for (plot_id in names(plots)) {
-  print(plots[[plot_id]])
-  # Uncomment the next line to save each plot as a separate file
-  # ggsave(filename = paste("plot_ALB_", plot_id, ".png", sep = ""), plot = plots[[plot_id]], width = 10, height = 8)
-}
-
-
-
-
-#R_Square calculations ----
-
-
-# Ensure Depth column is correctly named (replace 'Depth..cm.' with the actual column name in your dataset)
+# Ensure the Depth column is correctly named (replace 'Depth' with the actual column name in your dataset)
 data$LogDepth <- log(data$Depth)
 
 # Initialize an empty dataframe to store R-squared values
-
 r_squared_df <- data.frame(Exploratory = character(),
                            Plot.ID = character(),
                            R.Squared = numeric(),
@@ -209,46 +158,19 @@ for (exploratory in exploratories) {
 # Display the R-squared values dataframe
 print(r_squared_df)
 
-
-# Plot the R squares----
+# --- Plot the R squares ---
 
 
 ggplot(r_squared_df, aes(x = Plot.ID, y = R.Squared, fill = R.Squared)) +
   geom_bar(stat = "identity") +
   geom_text(aes(label = sprintf("%.2f", R.Squared)), nudge_y = 0.02, size = 3) +
   scale_fill_gradient(low = "blue", high = "red", name = "R-squared Value") +
-  labs(title = "R-squared Values by Plot ID",
-       x = "Plot ID",
-       y = "R-squared Value") +
+  labs(title = "R-squared Values by Plot ID", x = "Plot ID", y = "R-squared Value") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  theme(legend.title = element_text(size = 10))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.title = element_text(size = 10))
 
-
-# Determine how many plots have an R-squared value over 40%
-over_50 <- r_squared_df %>% filter(R.Squared > 0.5)
-
-# Print the Plot IDs with R-squared values over 40%
-print(over_50$Plot.ID)
-
-# Count of plots with R-squared over 40%
-print(nrow(over_50))
-
-
-# Group by 'Exploratory', filter for R.Squared > 0.4, and then count the number of plots per exploratory
-counts_over_70 <- r_squared_df %>%
-  group_by(Exploratory) %>%
-  filter(R.Squared > 0.7) %>%
-  summarise(Count = n())
-
-# Print the counts for each region
-print(counts_over_70)
-
-
-
-
-#Data power using observation ----
-
+# --- Data power using observation ---
 
 # Count the number of observations for each Plot.ID
 data_counts <- data %>%
@@ -262,18 +184,12 @@ ggplot(data_counts, aes(x = Plot.ID, y = Count, fill = Count)) +
   geom_bar(stat = "identity") +
   geom_text(aes(label = Count), nudge_y = 0.02, size = 3) +
   scale_fill_gradient(low = "blue", high = "red", name = "Observation Count") +
-  labs(title = "Number of Observations by Plot ID",
-       x = "Plot ID",
-       y = "Number of Observations") +
+  labs(title = "Number of Observations by Plot ID", x = "Plot ID", y = "Number of Observations") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         legend.title = element_text(size = 10))
 
-
-
-
-#observation effect on R square ----
-
+# --- Observation effect on R square ---
 
 # First, ensure that r_squared_df has a matching number of observations per plot
 # This can be done by joining or ensuring both data frames are aligned
@@ -284,111 +200,76 @@ combined_df <- merge(data_counts, r_squared_df, by = "Plot.ID")
 correlation_coefficient <- cor(combined_df$Count, combined_df$R.Squared)
 print(correlation_coefficient)
 
-
-
-#plot the overlapping
-
+# Plot the overlapping
 ggplot(combined_df, aes(x = Count, y = R.Squared)) +
   geom_point(aes(color = R.Squared), size = 3) +  # Color points by R.Squared value for additional insight
   geom_smooth(method = "lm", color = "blue") +   # Add a linear regression line
   scale_color_gradient(low = "blue", high = "red", name = "R-squared Value") +
-  labs(title = "Effect of Data Power on R-squared Values",
-       x = "Number of Observations (Data Power)",
-       y = "R-squared Value") +
+  labs(title = "Effect of Data Power on R-squared Values", x = "Number of Observations (Data Power)", y = "R-squared Value") +
   theme_minimal()
 
 
 
-#HEG48----
+# 50% Determine how many plots have an R-squared value over 50%----
+over_50 <- r_squared_df %>% filter(R.Squared > 0.5)
+print(over_50$Plot.ID)
+print(nrow(over_50))
 
-# Adding LogDepth to the dataframe
-data$LogDepth <- log(data$Depth..cm.)
+# Group by 'Exploratory', filter for R.Squared > 0.4, and then count the number of plots per exploratory
+counts_over_50 <- r_squared_df %>%
+  group_by(Exploratory) %>%
+  filter(R.Squared > 0.5) %>%
+  summarise(Count = n())
 
-# Filter data for 'HEG48' in the 'Plot.ID' column
-plot_data <- subset(data, Plot.ID == "HEG48")
+# Print the counts for each region
+print(counts_over_50)
 
-# Check if plot_data is not empty to proceed
-if (nrow(plot_data) > 0) {
+
   
-  # Fit the linear model with logarithmic transformation
-  model <- lm(d18O ~ LogDepth, data = plot_data)
+  #PLANTS ----
+plant_data_clean <- read.csv("/Users/sepidehgolshani/Desktop/PhD.ExploreNiche/ExploreNiche/plant_data_clean.csv")
+plant_data <- plant_data_clean
+
+# Filter plant data for 'HEG48'
+plant_data_HEG48 <- subset(plant_data, Plot.ID == "HEG48")
+
+# Check if there is data for HEG48 to proceed
+if (nrow(plant_data_HEG48) > 0) {
   
-  # Create a new data frame for predictions
-  prediction_data <- data.frame(LogDepth = seq(min(plot_data$LogDepth), max(plot_data$LogDepth), length.out = 100))
+  # Generate a dense range of LogDepth values from the soil data for prediction
+  dense_log_depth <- seq(min(data$LogDepth), max(data$LogDepth), length.out = 1000)
+  prediction_data <- data.frame(LogDepth = dense_log_depth)
   prediction_data$d18O <- predict(model, newdata = prediction_data)
   
-  # Calculate R-squared value
-  r_squared <- summary(model)$r.squared
+  # For each plant d18O value, find the closest predicted d18O and its corresponding LogDepth
+  predicted_depths <- sapply(plant_data_HEG48$d18O, function(x) {
+    closest_index <- which.min(abs(prediction_data$d18O - x))
+    return(exp(prediction_data$LogDepth[closest_index]))  # Convert LogDepth back to actual Depth
+  })
   
-  # Create the plot
-  p <- ggplot(plot_data, aes(x = d18O, y = Depth..cm.)) +
-    geom_point() +  # Add points
-    geom_line(data = prediction_data, aes(x = d18O, y = exp(LogDepth)), color = "red") +  # Add the regression line
-    annotate("text", x = max(plot_data$d18O), y = 0, hjust = 1.1, vjust = -0.1,
-             label = paste("R^2 = ", round(r_squared, 2), sep = ""),
-             size = 5, parse = TRUE) +
+  # Add the predicted depths to the plant dataset
+  plant_data_HEG48$PredictedDepth <- predicted_depths
+  
+  # Plotting predicted water uptake depth for each species
+  library(ggplot2)
+  p <- ggplot(plant_data_HEG48, aes(x = Species, y = PredictedDepth, fill = Species)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
     theme_minimal() +
-    labs(title = paste("Plot ID: HEG48"),
-         x = expression(delta^18*O ~ '(%o)'),
-         y = "Depth (cm)")
+    labs(title = "Predicted Water Uptake Depth for Species in HEG48",
+         x = "Species",
+         y = "Predicted Water Uptake Depth (cm)") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
-  # Print the plot
   print(p)
   
-  
-  #PLANT FIT IN THE SOIL MODEL ----
-  
-  plant_data <- plant_data_clean
-  # Assuming 'plant_data' is your loaded plant dataset
-  # and 'model' is the linear model created for HEG48 based on the soil data
-  
-  # Filter plant data for HEG48
-  plant_data_HEG48 <- subset(plant_data, Plot.ID == "HEG48")
-  
-  # Check if plant_data_HEG48 is not empty to proceed
-  if (nrow(plant_data_HEG48) > 0) {
-    
-    # Predict water uptake depth based on the d18O value
-    # Since we cannot directly predict 'Depth' from 'd18O' using the model (it's d18O ~ LogDepth),
-    # we'll use the predicted d18O values at different LogDepth levels to find the best match for each plant d18O
-    
-    # Generate a dense range of LogDepth values
-    dense_log_depth <- seq(min(data$LogDepth), max(data$LogDepth), length.out = 1000)
-    prediction_data <- data.frame(LogDepth = dense_log_depth)
-    prediction_data$d18O <- predict(model, newdata = prediction_data)
-    
-    # For each plant d18O value, find the closest predicted d18O and its corresponding LogDepth
-    predicted_depths <- sapply(plant_data_HEG48$d18O, function(x) {
-      closest <- which.min(abs(prediction_data$d18O - x))
-      return(exp(prediction_data$LogDepth[closest]))  # Convert LogDepth back to Depth
-    })
-    
-    # Add the predicted depths to the plant dataset
-    plant_data_HEG48$PredictedDepth <- predicted_depths
-    
-    # Plotting
-    p <- ggplot(plant_data_HEG48, aes(x = Species, y = PredictedDepth)) +
-      geom_bar(stat = "identity", position = position_dodge(), aes(fill = Species)) +
-      theme_minimal() +
-      labs(title = "Predicted Water Uptake Depth for Species in HEG48",
-           x = "Species",
-           y = "Predicted Water Uptake Depth (cm)") +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    
-    print(p)
-    
-  } else {
-    message("No plant data found for HEG48")
-  }
+} else {
+  message("No plant data found for HEG48")
+}
+
   
   
   
-  
-  
-  
-  
-  
-  # Plant / Soil model----
+  # Single Plant / Soil model----
   
   # Adding LogDepth to the dataframe
   data$LogDepth <- log(data$Depth..cm.)
@@ -440,10 +321,11 @@ if (nrow(plot_data) > 0) {
   
   
   
-  #ALL HEG PLOTS----
+  #All HEG plant/ soil models----
   
+  # --- Soil and Plant Model Integration ---
   
-  # Adding LogDepth to the dataframe
+  # Prepare the LogDepth column in the dataset
   data$LogDepth <- log(data$Depth..cm.)
   
   # Identify all unique HEG plots
@@ -451,54 +333,40 @@ if (nrow(plot_data) > 0) {
   
   # Loop through each HEG plot
   for (plot_id in HEG_plots) {
-    # Filter data for each HEG plot
     plot_data <- subset(data, Plot.ID == plot_id)
     
     if (nrow(plot_data) > 0) {
       # Fit the linear model with logarithmic transformation
       model <- lm(d18O ~ LogDepth, data = plot_data)
-      
-      # Prepare a prediction frame for plotting the regression line
       prediction_data <- data.frame(LogDepth = seq(min(plot_data$LogDepth), max(plot_data$LogDepth), length.out = 100))
       prediction_data$d18O <- predict(model, newdata = prediction_data)
-      
-      # Calculate R-squared value for the soil model
       r_squared <- summary(model)$r.squared
       
-      # Filter plant data for the current plot
       plant_data_current <- subset(plant_data_clean, Plot.ID == plot_id)
       
       if (nrow(plant_data_current) > 0) {
-        # Predict plant water uptake depths
+        # Predict and convert LogDepth back to Depth
         plant_data_current$PredictedLogDepth <- sapply(plant_data_current$d18O, function(x) {
           closest <- which.min(abs(prediction_data$d18O - x))
           return(prediction_data$LogDepth[closest])
         })
-        
-        # Convert predicted LogDepth back to Depth for plotting
         plant_data_current$PredictedDepth <- exp(plant_data_current$PredictedLogDepth)
         
-        # Check the number of unique species and assign colors
-        unique_species <- unique(plant_data_current$Species)
-        num_species <- length(unique_species)
-        colors <- hcl.colors(num_species, "Spectral")
+        # Assign colors for species visualization
+        colors <- hcl.colors(length(unique(plant_data_current$Species)), "Spectral")
         
-        # Create the plot for each HEG plot
+        # Create and print the plot
         p <- ggplot() +
           geom_point(data = plot_data, aes(x = d18O, y = Depth..cm.), color = "gray") +
           geom_line(data = prediction_data, aes(x = d18O, y = exp(LogDepth)), color = "darkgreen") +
           geom_point(data = plant_data_current, aes(x = d18O, y = PredictedDepth, color = Species), size = 4) +
-          geom_text(data = plant_data_current, aes(x = d18O, y = PredictedDepth, label = Species), vjust = -1, hjust = -0.1,  size = 3) +
           scale_y_reverse() +
           scale_color_manual(values = colors) +
-          annotate("text", x = min(plot_data$d18O), y = 0, label = sprintf("R² = %.2f", r_squared), hjust = 0, vjust = -1, size = 4) +
           theme_minimal() +
-          labs(title = paste("Integration of Plant Water Uptake Depths with Soil Model -", plot_id),
+          labs(title = paste("Plant Water Uptake Depths with Soil Model -", plot_id),
                x = expression(delta^18*O ~ '(%o)'),
-               y = "Depth (cm)") +
-          theme(legend.title = element_blank())
+               y = "Depth (cm)")
         
-        # Print the plot
         print(p)
       } else {
         message(paste("No plant data found for", plot_id))
@@ -511,14 +379,9 @@ if (nrow(plot_data) > 0) {
   
   
   
-  #interactive----
-  
-  install.packages("svglite")
-  
-  library(svglite)
-  library(shiny)
-  library(ggplot2)
-  
+  #Interactive plant/ Soil----
+
+
   # Assuming 'data' and 'plant_data_clean' are loaded globally
   
   # Adding LogDepth to the dataframe
@@ -612,6 +475,7 @@ if (nrow(plot_data) > 0) {
   
   #SPECIES----
   
+#All species from all plots----
   # Function to simulate plot_model for an entire dataset (global model for simplification)
   global_plot_model <- function(data) {
     data$LogDepth <- log(data$`Depth..cm.`)  # Using correct column name
@@ -653,7 +517,7 @@ if (nrow(plot_data) > 0) {
   
   
   
-  #filter ----
+  #filter 50% R-squares of all plots ----
   
   
   # Define the specific plot numbers to include
@@ -662,7 +526,6 @@ if (nrow(plot_data) > 0) {
                       "HEG4", "HEG40", "HEG43", "HEG44", "HEG48", "HEG5", "HEG50", "HEG7", "HEG8", "HEG9", 
                       "AEG1", "AEG10", "AEG2", "AEG20", "AEG21", "AEG22", "AEG26", "AEG3", "AEG30", "AEG31",
                       "AEG33", "AEG38", "AEG39", "AEG4", "AEG45", "AEG46", "AEG49", "AEG5", "AEG7", "AEG8", "AEG9")
-  
   
   
   # Assuming data and plant_data_clean are already loaded
@@ -714,10 +577,9 @@ if (nrow(plot_data) > 0) {
   
   
   
-  library(ggplot2)
-  library(dplyr)
   
-  # Define the specific plot numbers to include, ensure these are valid for 'SEG'
+  
+  # SEG plots more than 50%----
   selected_plots <- c("SEG18", "SEG22", "SEG31", "SEG32", "SEG33", "SEG37", "SEG38", "SEG43", "SEG46", "SEG5", 
                       "SEG8")
   
@@ -768,9 +630,7 @@ if (nrow(plot_data) > 0) {
   
   
   
-  library(ggplot2)
-  library(dplyr)
-  
+  # HEG plots more than 50%----
   # Define the specific plot numbers to include, focusing on 'HEG'
   selected_plots <- c("HEG1", "HEG10", "HEG11", "HEG26", "HEG27", "HEG28", "HEG3", "HEG30", "HEG33",
                       "HEG4", "HEG40", "HEG43", "HEG44", "HEG48", "HEG5", "HEG50", "HEG7", "HEG8", "HEG9")
@@ -822,10 +682,7 @@ if (nrow(plot_data) > 0) {
   
   
   
-  
-  library(ggplot2)
-  library(dplyr)
-  
+  # AEG plots more than 50%----
   # Define the specific plot numbers to include, focusing on 'ALB'
   selected_plots <- c("AEG1", "AEG10", "AEG11", "AEG26", "AEG27", "AEG28", "AEG3", "AEG30", "AEG33",
                       "AEG4", "AEG40", "AEG43", "AEG44", "AEG48", "AEG5", "AEG50", "AEG7", "AEG8", "AEG9")
@@ -887,11 +744,8 @@ if (nrow(plot_data) > 0) {
   
   
   
-  #density----
+  #Density interactive graph----
   
-  library(ggplot2)
-  library(dplyr)
-  library(plotly)
   
   # Assuming the filtered_plant_data and species_summary have already been computed
   
@@ -920,8 +774,6 @@ if (nrow(plot_data) > 0) {
   
   
   
-  library(dplyr)
-  library(plotly)
   
   # Filter out species with fewer than two data points
   filtered_plant_data <- filtered_plant_data %>%
@@ -964,7 +816,7 @@ if (nrow(plot_data) > 0) {
   
   
   
-  #test----
+  #test clustering data----
   library(ggplot2)
   library(dplyr)
   
